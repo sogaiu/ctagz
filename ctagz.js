@@ -393,6 +393,20 @@ class CTags {
         })(this)
     }
 
+    findTagsForPath(filePath) {
+        return Promise.coroutine(function* findit(self) {
+            const matches = []
+            let line
+            while ((line = yield self._readTagLine())) {
+                const entry = self._parseTagLine(line)
+                if (entry.valid && entry.file === filePath) {
+                    matches.push(entry)
+                }
+            }
+            return matches
+        })(this)
+    }
+
     init() {
         let state
         if (!this.fd) {
@@ -510,5 +524,32 @@ function findCTagsBSearch(searchPath, tag, ignoreCase = false, tagFilePattern = 
     })
 }
 
+/**
+ * Finds the CTags file from the specified search pattern and
+ * searches it for tags with a specific file path
+ * @param {string} searchPath The path to search for the tags file
+ * @param {string} filePath The path to search for in the tags file
+ * @param {string} tagFilePattern The pattern to use when looking for
+ *                                the tags file (refer to findCTagsFile)
+ * @return {any[]} A promise, resolving to a list of found entries,
+ *                 or an empty array if none found
+ */
+function findCTagsForPath(searchPath, filePath, tagFilePattern = '{.,}tags') {
+    const ctags = findCTagsFile(searchPath, tagFilePattern)
+        .disposer(tags => {
+            if (tags) {
+                tags.destroy()
+            }
+        })
+    return Promise.using(ctags, tags => {
+        if (tags) {
+            return tags.init()
+                .then(() => tags.findTagsForPath(filePath))
+                .then(result => ({ tagsFile: tags.tagsFile, results: result }))
+        }
+        return { tagsFile: '', results: [] }
+    })
+}
 
-module.exports = { CTags, findCTagsFile, findCTagsBSearch }
+
+module.exports = { CTags, findCTagsFile, findCTagsBSearch, findCTagsForPath }
